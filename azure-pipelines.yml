@@ -1,0 +1,46 @@
+trigger:
+  - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  projectDir: 'employeeapp'
+  azureServiceConnection: 'employeeregistry-service-connection'
+  acrName: 'employeeregistry'
+  imageRepository: 'employee-frontend'
+
+steps:
+  - script: |
+      echo "Repository root: $(Build.SourcesDirectory)"
+      echo "Frontend project contents:"
+      ls -lrth "$(Build.SourcesDirectory)/$(projectDir)"
+    displayName: 'Check Frontend Files'
+
+  - task: AzureCLI@2
+    displayName: 'Build and Push Docker Image to ACR'
+    inputs:
+      azureSubscription: '$(azureServiceConnection)'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -e
+
+        echo "Logging in to Azure Container Registry..."
+        az acr login --name "$(acrName)"
+
+        cd "$(Build.SourcesDirectory)/$(projectDir)"
+
+        echo "Building Docker image..."
+        docker build \
+          -t "$(acrName).azurecr.io/$(imageRepository):latest" \
+          -t "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)" \
+          .
+
+        echo "Pushing latest image..."
+        docker push "$(acrName).azurecr.io/$(imageRepository):latest"
+
+        echo "Pushing Build ID image..."
+        docker push "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+
+        echo "Images pushed successfully."
