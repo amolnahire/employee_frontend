@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: employee-frontend
+  labels:
+    app: employee-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: employee-frontend
+  template:
+    metadata:
+      labels:
+        app: employee-frontend
+    spec:
+      containers:
+        - name: employee-frontend
+          image: employeeregistry.azurecr.io/employee-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

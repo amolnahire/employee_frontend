@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: employee-frontend-service
+spec:
+  selector:
+    app: employee-frontend
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80

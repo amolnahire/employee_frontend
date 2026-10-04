@@ -9,6 +9,9 @@ variables:
   azureServiceConnection: 'employeeregistry-service-connection'
   acrName: 'employeeregistry'
   imageRepository: 'employee-frontend'
+  azureSubscriptionId: 'dd989c95-4624-47b6-9ef5-943f27e6a064'
+  aksResourceGroup: 'employee-resource'
+  aksClusterName: 'employee-cluster-test'
 
 steps:
   - script: |
@@ -44,3 +47,33 @@ steps:
         docker push "$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
 
         echo "Images pushed successfully."
+
+  - task: AzureCLI@2
+    displayName: 'Deploy Frontend to AKS'
+    inputs:
+      azureSubscription: '$(azureServiceConnection)'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+
+        IMAGE="$(acrName).azurecr.io/$(imageRepository):$(Build.BuildId)"
+
+        az account set --subscription "$(azureSubscriptionId)"
+        az aks get-credentials \
+          --resource-group "$(aksResourceGroup)" \
+          --name "$(aksClusterName)" \
+          --overwrite-existing
+
+        kubectl apply \
+          -f "$(Build.SourcesDirectory)/$(projectDir)/aks/deployment.yaml" \
+          -f "$(Build.SourcesDirectory)/$(projectDir)/aks/service.yaml"
+
+        kubectl set image deployment/employee-frontend \
+          employee-frontend="$IMAGE"
+
+        kubectl rollout status \
+          deployment/employee-frontend \
+          --timeout=5m
+
+        kubectl get deployment employee-frontend -o wide

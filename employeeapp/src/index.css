@@ -1,14 +1,14 @@
 :root {
-  --ink: #20362e;
-  --muted: #78877f;
+  --ink: #20372e;
+  --muted: #77847c;
   --green: #43825f;
   --green-dark: #2e6548;
   --orange: #e88947;
   --red: #a74e40;
   --line: #dfe7e1;
   --line-soft: #ebf0ec;
-  --paper: #f4f7f4;
-  --sans: 'Trebuchet MS', 'Segoe UI', sans-serif;
+  --paper: #f6f7f3;
+  --sans: 'Avenir Next', 'Segoe UI', sans-serif;
   --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 
   font-family: var(--sans);
@@ -20,8 +20,6 @@
   -moz-osx-font-smoothing: grayscale;
   color: var(--ink);
   background-color: var(--paper);
-  background-image: radial-gradient(#dbe5dd 0.65px, transparent 0.65px);
-  background-size: 14px 14px;
 }
 
 * {
@@ -29,7 +27,7 @@
 }
 
 body {
-  min-width: 340px;
+  min-width: 320px;
   min-height: 100vh;
   margin: 0;
 }
