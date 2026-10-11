@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const API_STORAGE_KEY = 'transaction-platform-api-origin'
-const DEFAULT_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8082'
+const DEFAULT_API_URL = import.meta.env.VITE_API_URL || 'http://20.99.223.75/'
 const INITIAL_API_URL = localStorage.getItem(API_STORAGE_KEY) ?? DEFAULT_API_URL
 const TODAY = new Date().toISOString().slice(0, 10)
 const TODAY_LABEL = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()
