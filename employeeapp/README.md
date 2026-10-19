@@ -2,11 +2,12 @@
 
 ## Configure the API
 
-The frontend defaults to `http://localhost:8082` and appends API routes such as
+The frontend defaults to `http://20.99.223.75/` and appends API routes such as
 `/api/employees`. To change the backend host, copy `.env.example` to `.env.local`
 and update `VITE_API_URL`, then restart the development server or rebuild the
 app. You can also change the API base URL in the app's top bar; that value is
-saved in this browser.
+saved in this browser. A previously saved `http://localhost:8082` value is
+automatically replaced by the default backend.
 
 The Vite development proxy uses the same `VITE_API_URL` target. If needed, it
 can be overridden separately with `VITE_API_PROXY_TARGET`.

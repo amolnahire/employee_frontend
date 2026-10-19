@@ -9,10 +9,16 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         '/api': {
-          target: process.env.VITE_API_PROXY_TARGET || env.VITE_API_PROXY_TARGET || env.VITE_API_URL || 'http://localhost:8082',
+          target: process.env.VITE_API_PROXY_TARGET || env.VITE_API_PROXY_TARGET || env.VITE_API_URL || 'http://20.99.223.75/',
           changeOrigin: true,
         },
       },
+    },
+    test: {
+      environment: 'jsdom',
+      setupFiles: './src/test/setup.js',
+      globals: true,
+      css: true,
     },
   }
 })
