@@ -1,0 +1,302 @@
+
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        skipDefaultCheckout(false)
+    }
+
+    parameters {
+        booleanParam(
+            name: 'SONAR_ENABLED',
+            defaultValue: true,
+            description: 'Run SonarQube analysis and Quality Gate'
+        )
+    }
+
+    environment {
+        PROJECT_DIR = 'employeeapp'
+
+        AZURE_SUBSCRIPTION_ID = 'dd989c95-4624-47b6-9ef5-943f27e6a064'
+        AZURE_RESOURCE_GROUP = 'employee-resource'
+        AKS_CLUSTER_NAME = 'employee-cluster-test'
+        ACR_NAME = 'employeeregistry'
+        ACR_LOGIN_SERVER = 'employeeregistry.azurecr.io'
+        IMAGE_REPOSITORY = 'employee-frontend'
+        SONAR_HOST_URL = 'http://20.112.234.64:9000'
+        AKS_DEPLOYMENT = 'employee-frontend'
+        AKS_CONTAINER = 'employee-frontend'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+
+                echo "Workspace: ${WORKSPACE}"
+
+                sh '''
+                    set -eu
+                    pwd
+                    ls -la
+                '''
+            }
+        }
+
+        stage('Validate Project Files') {
+            steps {
+                sh '''
+                    set -eu
+
+                    test -d "$PROJECT_DIR"
+                    test -f "$PROJECT_DIR/Dockerfile"
+                    test -f "$PROJECT_DIR/aks/deployment.yaml"
+                    test -f "$PROJECT_DIR/aks/service.yaml"
+
+                    echo "Frontend project files validated."
+                '''
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            when {
+                expression {
+                    params.SONAR_ENABLED
+                }
+            }
+
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    withCredentials([
+                        string(
+                            credentialsId: 'sonar-token',
+                            variable: 'SONAR_TOKEN'
+                        )
+                    ]) {
+                        dir("${PROJECT_DIR}") {
+                            sh '''
+                                set -eu
+
+                                echo "Checking SonarQube connectivity..."
+
+                                curl -fsS \
+                                  --connect-timeout 10 \
+                                  --max-time 20 \
+                                  "$SONAR_HOST_URL/api/system/status"
+
+                                echo
+                                echo "Running frontend SonarQube analysis..."
+
+                                sonar-scanner \
+                                  -Dsonar.projectKey=employee-frontend \
+                                  -Dsonar.projectName=employee-frontend \
+                                  -Dsonar.sources=. \
+                                  -Dsonar.host.url="$SONAR_HOST_URL" \
+                                  -Dsonar.token="$SONAR_TOKEN"
+
+                                echo "SonarQube analysis completed."
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('SonarQube Quality Gate') {
+            when {
+                expression {
+                    params.SONAR_ENABLED
+                }
+            }
+
+            steps {
+                timeout(time: 15, unit: 'MINUTES') {
+                    script {
+                        def qualityGate = waitForQualityGate(
+                            abortPipeline: false
+                        )
+
+                        echo "SonarQube Quality Gate: ${qualityGate.status}"
+
+                        if (qualityGate.status != 'OK') {
+                            error(
+                                "SonarQube Quality Gate failed: ${qualityGate.status}"
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build and Push Docker Image') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'azure-service-principal',
+                        usernameVariable: 'AZURE_CLIENT_ID',
+                        passwordVariable: 'AZURE_CLIENT_SECRET'
+                    ),
+                    string(
+                        credentialsId: 'azure-tenant-id',
+                        variable: 'AZURE_TENANT_ID'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+
+                        echo "Logging in to Azure..."
+
+                        az login \
+                          --service-principal \
+                          --username "$AZURE_CLIENT_ID" \
+                          --password "$AZURE_CLIENT_SECRET" \
+                          --tenant "$AZURE_TENANT_ID" \
+                          --output none
+
+                        az account set \
+                          --subscription "$AZURE_SUBSCRIPTION_ID"
+
+                        echo "Logging in to Azure Container Registry..."
+                        az acr login --name "$ACR_NAME"
+
+                        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY"
+                        BUILD_IMAGE="$IMAGE:$BUILD_NUMBER"
+
+                        echo "Building image: $BUILD_IMAGE"
+
+                        docker build \
+                          -t "$BUILD_IMAGE" \
+                          -t "$IMAGE:latest" \
+                          "$PROJECT_DIR"
+
+                        echo "Pushing build-specific image..."
+                        docker push "$BUILD_IMAGE"
+
+                        echo "Pushing latest image..."
+                        docker push "$IMAGE:latest"
+
+                        echo "Docker images pushed successfully."
+                    '''
+                }
+            }
+        }
+
+        stage('Trivy Image Scan') {
+            steps {
+                sh '''
+                    set -eu
+
+                    IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$BUILD_NUMBER"
+
+                    echo "Checking local image: $IMAGE"
+                    docker image inspect "$IMAGE" >/dev/null
+
+                    echo "Scanning image for HIGH and CRITICAL vulnerabilities..."
+
+                    trivy image \
+                      --image-src docker \
+                      --scanners vuln \
+                      --severity HIGH,CRITICAL \
+                      --exit-code 0 \
+                      --ignore-unfixed \
+                      "$IMAGE"
+
+                    echo "Trivy scan completed. Continuing pipeline."
+                '''
+            }
+        }
+
+        stage('Deploy to AKS') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'azure-service-principal',
+                        usernameVariable: 'AZURE_CLIENT_ID',
+                        passwordVariable: 'AZURE_CLIENT_SECRET'
+                    ),
+                    string(
+                        credentialsId: 'azure-tenant-id',
+                        variable: 'AZURE_TENANT_ID'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+
+                        echo "Logging in to Azure..."
+
+                        az login \
+                          --service-principal \
+                          --username "$AZURE_CLIENT_ID" \
+                          --password "$AZURE_CLIENT_SECRET" \
+                          --tenant "$AZURE_TENANT_ID" \
+                          --output none
+
+                        az account set \
+                          --subscription "$AZURE_SUBSCRIPTION_ID"
+
+                        echo "Getting AKS credentials..."
+
+                        az aks get-credentials \
+                          --resource-group "$AZURE_RESOURCE_GROUP" \
+                          --name "$AKS_CLUSTER_NAME" \
+                          --overwrite-existing
+
+                        echo "Checking Kubernetes nodes..."
+                        kubectl get nodes
+
+                        echo "Applying Kubernetes manifests..."
+
+                        kubectl apply \
+                          -f "$PROJECT_DIR/aks/deployment.yaml"
+
+                        kubectl apply \
+                          -f "$PROJECT_DIR/aks/service.yaml"
+
+                        IMAGE="$ACR_LOGIN_SERVER/$IMAGE_REPOSITORY:$BUILD_NUMBER"
+
+                        echo "Updating frontend image to $IMAGE"
+
+                        kubectl set image \
+                          "deployment/$AKS_DEPLOYMENT" \
+                          "$AKS_CONTAINER=$IMAGE"
+
+                        echo "Waiting for deployment rollout..."
+
+                        kubectl rollout status \
+                          "deployment/$AKS_DEPLOYMENT" \
+                          --timeout=5m
+
+                        echo "Deployment:"
+                        kubectl get deployment "$AKS_DEPLOYMENT" -o wide
+
+                        echo "Pods:"
+                        kubectl get pods -o wide
+
+                        echo "Services:"
+                        kubectl get services
+
+                        echo "Frontend deployment completed successfully."
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Frontend CI/CD pipeline completed successfully.'
+        }
+
+        failure {
+            echo 'Pipeline failed. Review the failed stage in Console Output.'
+        }
+
+        always {
+            echo "Build number: ${BUILD_NUMBER}"
+            echo "Build result: ${currentBuild.currentResult}"
+        }
+    }
+}
