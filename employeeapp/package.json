@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@datadog/browser-rum": "^7.16.1",
+    "@datadog/browser-rum-react": "^7.16.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
