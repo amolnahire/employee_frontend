@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const API_STORAGE_KEY = 'transaction-platform-api-origin'
-const DEFAULT_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8082'
+const DEFAULT_API_URL = import.meta.env.VITE_API_URL || 'http://20.99.223.75/'
 const SAVED_API_URL = localStorage.getItem(API_STORAGE_KEY)
 const HAS_LEGACY_LOCAL_API_URL = SAVED_API_URL === 'http://localhost:8082' || SAVED_API_URL === 'http://localhost:8082/'
 const INITIAL_API_URL = HAS_LEGACY_LOCAL_API_URL ? DEFAULT_API_URL : SAVED_API_URL ?? DEFAULT_API_URL
